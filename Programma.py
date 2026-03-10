@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Block Dash - Fixed Collisions</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Arial Black', sans-serif;
+            touch-action: none;
+        }
+        .ui-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px;
+            color: white;
+            pointer-events: none;
+            display: flex;
+            justify-content: space-between;
+            z-index: 10;
+        }
+        .menu-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 20px;
+        }
+        .skin-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            backdrop-filter: blur(10px);
+        }
+        .skin-content {
+            background: #111;
+            padding: 30px;
+            border-radius: 24px;
+            border: 2px solid #333;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+        }
+        .death-overlay {
+            position: absolute;
+            inset: 0;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 110;
+            pointer-events: none;
+        }
+        .death-text {
+            font-size: 4rem;
+            font-weight: 900;
+            color: #ff4444;
+            text-shadow: 0 0 20px rgba(255, 68, 68, 0.5);
+            animation: popIn 0.3s forwards;
+        }
+        @keyframes popIn {
+            0% { transform: scale(0.5); }
+            100% { transform: scale(1); }
+        }
+        .level-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 15px;
+            width: 100%;
+            max-width: 800px;
+            margin-top: 2rem;
+        }
+        .level-card {
+            background: #111;
+            border: 3px solid #333;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .level-card:hover {
+            transform: translateY(-5px);
+            border-color: #fff;
+        }
+        .skin-options {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 10px;
+        }
+        .skin-btn {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            border: 2px solid #333;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            transition: all 0.2s;
+        }
+        .skin-btn.active {
+            border-color: white;
+            transform: scale(1.1);
+        }
+        .btn-custom {
+            margin-top: 30px;
+            background: white;
+            color: black;
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .btn-custom:active { transform: scale(0.95); }
+        .progress-bar-container {
+            position: absolute;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        #progressBar {
+            width: 0%;
+            height: 100%;
+            background: #fff;
+            transition: width 0.1s linear;
+        }
+        .btn-back {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.1);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            pointer-events: auto;
+            border: 1px solid rgba(255,255,255,0.3);
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+        .audio-toggle {
+            margin-top: 15px;
+            font-size: 0.6rem;
+            color: #555;
+            cursor: pointer;
+        }
+        .audio-toggle.active { color: #00f2ff; }
+    </style>
+</head>
+<body>
+
+    <div id="uiHud" class="ui-container" style="display: none;">
+        <div>
+            <p class="text-xs opacity-60">PUNTOS</p>
+            <p class="text-3xl font-bold" id="score">0</p>
+        </div>
+        <div class="text-center">
+            <p class="text-xs opacity-60">NIVEL</p>
+            <p class="text-2xl font-bold" id="levelLabel">1</p>
+            <div class="progress-bar-container">
+                <div id="progressBar"></div>
+            </div>
+        </div>
+        <div class="text-right">
+            <p class="text-xs opacity-60">RÉCORD</p>
+            <p class="text-xl font-bold text-green-400" id="highscore">0</p>
+        </div>
+        <button class="btn-back" onclick="showMenu()">SALIR</button>
+    </div>
+
+    <div id="levelMenu" class="menu-overlay">
+        <h1 class="text-6xl font-black italic text-white mb-2">BLOCK DASH</h1>
+        <p class="text-gray-500 uppercase tracking-widest text-sm mb-6">Selecciona un Nivel</p>
+        <div id="levelGrid" class="level-grid"></div>
+        <button class="btn-custom" onclick="toggleSkinModal(true)">
+            <span>👕</span> ASPECTO
+        </button>
+        <div id="audioBtn" class="audio-toggle" onclick="toggleAudio()">AUDIO DESACTIVADO</div>
+    </div>
+
+    <div id="skinModal" class="skin-modal">
+        <div class="skin-content">
+            <h2 class="text-xl font-bold text-white mb-6 text-center italic">PERSONALIZAR</h2>
+            <div class="mb-6">
+                <p class="text-[10px] text-gray-400 mb-2 tracking-widest uppercase text-center">Color del bloque</p>
+                <div id="colorOptions" class="skin-options"></div>
+            </div>
+            <div class="mb-8">
+                <p class="text-[10px] text-gray-400 mb-2 tracking-widest uppercase text-center">Cara (Smile)</p>
+                <div id="faceOptions" class="skin-options"></div>
+            </div>
+            <button class="w-full bg-white text-black py-3 rounded-xl font-bold" onclick="toggleSkinModal(false)">
+                GUARDAR Y CERRAR
+            </button>
+        </div>
+    </div>
+
+    <div id="deathOverlay" class="death-overlay">
+        <h2 class="death-text">GAME OVER</h2>
+    </div>
+
+
+    <script>
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const highscoreElement = document.getElementById('highscore');
+        const levelLabel = document.getElementById('levelLabel');
+        const progressBar = document.getElementById('progressBar');
+        const levelMenu = document.getElementById('levelMenu');
+        const levelGrid = document.getElementById('levelGrid');
+        const skinModal = document.getElementById('skinModal');
+        const uiHud = document.getElementById('uiHud');
+        const deathOverlay = document.getElementById('deathOverlay');
+        const audioBtn = document.getElementById('audioBtn');
+
+        const skinConfig = {
+            colors: ['#00f2ff', '#ff00ff', '#00ff88', '#ff8800', '#ff4444', '#ffffff', '#ffff00'],
+            faces: ['', '🙂', '😎', '😡', '😱', '👻', '💀', '🔥']
+        };
+
+        const player = {
+            x: 150, y: 0, w: 48, h: 48, dy: 0,
+            gravity: 0.95, jumpForce: -16.5,
+            jumpCount: 0, maxJumps: 2,
+            grounded: false, rotation: 0,
+            color: '#00f2ff', face: '🙂'
+        };
+
+        function toggleSkinModal(show) {
+            skinModal.style.display = show ? 'flex' : 'none';
+        }
+
+        function initSkins() {
+            const colorContainer = document.getElementById('colorOptions');
+            const faceContainer = document.getElementById('faceOptions');
+            colorContainer.innerHTML = '';
+            faceContainer.innerHTML = '';
+
+            skinConfig.colors.forEach(color => {
+                const btn = document.createElement('div');
+                btn.className = 'skin-btn' + (color === player.color ? ' active' : '');
+                btn.style.backgroundColor = color;
+                btn.onclick = () => {
+                    player.color = color;
+                    document.querySelectorAll('#colorOptions .skin-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                };
+                colorContainer.appendChild(btn);
+            });
+
+            skinConfig.faces.forEach(face => {
+                const btn = document.createElement('div');
+                btn.className = 'skin-btn' + (face === player.face ? ' active' : '');
+                btn.innerText = face || '❌';
+                btn.onclick = () => {
+                    player.face = face;
+                    document.querySelectorAll('#faceOptions .skin-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                };
+                faceContainer.appendChild(btn);
+            });
+        }
+
+        let audioCtx = null;
+        let isAudioEnabled = false;
+        let musicLoop = null;
+
+        function toggleAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            isAudioEnabled = !isAudioEnabled;
+            audioBtn.innerText = isAudioEnabled ? "AUDIO ACTIVADO" : "AUDIO DESACTIVADO";
+            audioBtn.classList.toggle('active', isAudioEnabled);
+            if (!isAudioEnabled) stopMusic(); else if (gameState === 'PLAYING') startMusic();
+        }
+
+        function playJumpSound() {
+            if (!isAudioEnabled || !audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+        }
+
+        function stopMusic() { if (musicLoop) { clearInterval(musicLoop); musicLoop = null; } }
+
+        function startMusic() {
+            stopMusic();
+            if (!isAudioEnabled || !audioCtx) return;
+            const bpm = 120 + (currentLevelIndex * 20);
+            const interval = (60 / bpm) * 1000 / 2;
+            let step = 0;
+            const baseFreqs = [[110, 130, 165], [82, 110, 123], [73, 92, 110], [55, 65, 82], [146, 174, 220]];
+            musicLoop = setInterval(() => {
+                if (gameState !== 'PLAYING') return;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                const freqs = baseFreqs[currentLevelIndex % baseFreqs.length];
+                let freq = freqs[step % freqs.length];
+                if (step % 4 === 0) freq *= 2;
+                osc.type = currentLevelIndex > 2 ? 'sawtooth' : 'triangle';
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.02, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+                step++;
+            }, interval);
+        }
+
+        const levels = [
+            { id: 0, speed: 8, bg: '#050505', accent: '#00f2ff', target: 800, name: "ORIGEN" },
+            { id: 1, speed: 10, bg: '#0a0a20', accent: '#ff00ff', target: 1200, name: "NEÓN" },
+            { id: 2, speed: 12, bg: '#052005', accent: '#00ff88', target: 1800, name: "TÓXICO" },
+            { id: 3, speed: 15, bg: '#201005', accent: '#ff8800', target: 2500, name: "INFERNO" },
+            { id: 4, speed: 18, bg: '#200505', accent: '#ff0044', target: 4000, name: "CAOS" }
+        ];
+
+        let currentLevelIndex = 0;
+        let gameState = 'MENU'; 
+        let score = 0;
+        let highscore = 0;
+        let frames = 0;
+        let lastObstaclePos = 0;
+        let obstacles = [];
+
+        function initMenu() {
+            levelGrid.innerHTML = '';
+            levels.forEach(lvl => {
+                const card = document.createElement('div');
+                card.className = 'level-card';
+                card.innerHTML = `
+                    <p class="text-[8px] opacity-40 uppercase mb-1">Fase ${lvl.id + 1}</p>
+                    <p class="text-xs font-bold" style="color: ${lvl.accent}">${lvl.name}</p>
+                `;
+                card.onclick = () => startLevel(lvl.id);
+                levelGrid.appendChild(card);
+            });
+            initSkins();
+        }
+
+        function showMenu() {
+            gameState = 'MENU';
+            stopMusic();
+            levelMenu.style.display = 'flex';
+            uiHud.style.display = 'none';
+            deathOverlay.style.display = 'none';
+            canvas.style.backgroundColor = '#050505';
+        }
+
+        function startLevel(index) {
+            currentLevelIndex = index;
+            gameState = 'PLAYING';
+            levelMenu.style.display = 'none';
+            uiHud.style.display = 'flex';
+            resetLevelState();
+            updateLevelUI();
+            startMusic();
+        }
+
+        function resetLevelState() {
+            score = 0; frames = 0; obstacles = [];
+            player.dy = 0; player.y = canvas.height - 148;
+            player.rotation = 0; player.jumpCount = 0;
+            lastObstaclePos = 0;
+            progressBar.style.width = "0%";
+        }
+
+        function updateLevelUI() {
+            const level = levels[currentLevelIndex];
+            canvas.style.backgroundColor = level.bg;
+            levelLabel.innerText = currentLevelIndex + 1;
+            levelLabel.style.color = level.accent;
+            progressBar.style.backgroundColor = level.accent;
+        }
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            if (gameState === 'MENU') player.y = canvas.height - 148;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function handleInput() {
+            if (gameState !== 'PLAYING') return;
+            if (player.grounded || player.jumpCount < player.maxJumps) {
+                player.dy = player.jumpForce;
+                player.grounded = false;
+                player.jumpCount++;
+                playJumpSound();
+            }
+        }
+
+        window.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(); }, { passive: false });
+        window.addEventListener('mousedown', handleInput);
+        window.addEventListener('keydown', (e) => { if(e.code === 'Space' || e.code === 'ArrowUp') handleInput(); });
+
+        function spawnObstacle() {
+            const groundY = canvas.height - 100;
+            const rand = Math.random();
+            if (rand < 0.25) {
+                obstacles.push({ x: canvas.width + 100, y: groundY - 50, w: 60, h: 50, type: 'block' });
+            } else if (rand < 0.45) {
+                obstacles.push({ x: canvas.width + 100, y: groundY - 50, w: 60, h: 50, type: 'block' });
+                obstacles.push({ x: canvas.width + 160, y: groundY - 100, w: 60, h: 100, type: 'block' });
+            } else if (rand < 0.70) {
+                obstacles.push({ x: canvas.width + 100, y: groundY - 50, w: 50, h: 50, type: 'spike' });
+            } else {
+                obstacles.push({ x: canvas.width + 100, y: groundY - 140, w: 220, h: 48, type: 'block' });
+            }
+        }
+
+        function update() {
+            if (gameState !== 'PLAYING') return;
+            const level = levels[currentLevelIndex];
+            frames++;
+            score = Math.floor(frames / 8);
+            scoreElement.innerText = score;
+            progressBar.style.width = Math.min(100, (score / level.target) * 100) + "%";
+            if (score >= level.target) { showMenu(); return; }
+
+            player.dy += player.gravity;
+            player.y += player.dy;
+
+            let onAnySurface = false;
+
+            // Colisión con suelo base
+            if (player.y + player.h >= groundY) {
+                player.y = groundY - player.h; 
+                player.dy = 0;
+                player.grounded = true; 
+                player.jumpCount = 0; 
+                onAnySurface = true;
+            }
+
+            const gap = 450 - (level.speed * 4);
+            if (canvas.width - lastObstaclePos > gap) { spawnObstacle(); lastObstaclePos = canvas.width; }
+            lastObstaclePos -= level.speed;
+
+            obstacles.forEach((obs, i) => {
+                obs.x -= level.speed;
+                if (obs.type === 'block') {
+                    // Definir áreas de colisión
+                    const pLeft = player.x + 10;
+                    const pRight = player.x + player.w - 10;
+                    const pBottom = player.y + player.h;
+                    const pTop = player.y;
+
+                    const oLeft = obs.x;
+                    const oRight = obs.x + obs.w;
+                    const oTop = obs.y;
+                    const oBottom = obs.y + obs.h;
+
+                    // Verificar si hay intersección general
+                    if (pRight > oLeft && pLeft < oRight && pBottom > oTop && pTop < oBottom) {
+                        // Si estamos cayendo y el pie está cerca de la parte superior del bloque
+                        if (player.dy >= 0 && pBottom <= oTop + 25) {
+                            player.y = oTop - player.h;
+                            player.dy = 0;
+                            player.grounded = true;
+                            player.jumpCount = 0;
+                            onAnySurface = true;
+                        } else {
+                            // Chocamos de frente o por abajo
+                            handleDeath();
+                        }
+                    }
+                } else if (obs.type === 'spike') {
+                    const padding = 12;
+                    if (player.x + padding < obs.x + obs.w - padding && player.x + player.w - padding > obs.x + padding &&
+                        player.y + padding < obs.y + obs.h - padding && player.y + player.h - padding > obs.y + padding) {
+                        handleDeath();
+                    }
+                }
+                if (obs.x < -500) obstacles.splice(i, 1);
+            });
+
+            if (!onAnySurface && player.y + player.h < groundY) {
+                player.grounded = false;
+            }
+        }
+
+        function handleDeath() {
+            if (gameState === 'DEAD') return;
+            gameState = 'DEAD'; stopMusic();
+            if (score > highscore) { highscore = score; highscoreElement.innerText = highscore; }
+            deathOverlay.style.display = 'flex';
+            setTimeout(() => { 
+                deathOverlay.style.display = 'none'; 
+                resetLevelState(); 
+                gameState = 'PLAYING';
+                startMusic(); 
+            }, 1500);
+        }
+
+        function draw() {
+            const level = (gameState === 'PLAYING' || gameState === 'DEAD') ? levels[currentLevelIndex] : { bg: '#050505', accent: '#333' };
+            ctx.fillStyle = level.bg; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            const groundY = canvas.height - 100;
+            ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, groundY, canvas.width, 100);
+            ctx.strokeStyle = level.accent; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(canvas.width, groundY); ctx.stroke();
+
+            if (gameState === 'PLAYING' || gameState === 'DEAD') {
+                obstacles.forEach(obs => {
+                    ctx.save();
+                    if (obs.type === 'spike') {
+                        ctx.fillStyle = '#ff4444'; ctx.beginPath();
+                        ctx.moveTo(obs.x, obs.y + obs.h); ctx.lineTo(obs.x + obs.w/2, obs.y); ctx.lineTo(obs.x + obs.w, obs.y + obs.h);
+                        ctx.closePath(); ctx.fill(); ctx.strokeStyle = 'white'; ctx.stroke();
+                    } else {
+                        ctx.fillStyle = '#111'; ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+                        ctx.strokeStyle = level.accent; ctx.lineWidth = 3; ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+                    }
+                    ctx.restore();
+                });
+
+                ctx.save();
+                ctx.translate(player.x + player.w/2, player.y + player.h/2);
+                if (gameState === 'PLAYING') {
+                    if (!player.grounded) player.rotation += 0.22;
+                    else player.rotation = Math.round(player.rotation / (Math.PI/2)) * (Math.PI/2);
+                }
+                ctx.rotate(player.rotation);
+                ctx.shadowBlur = 15; ctx.shadowColor = gameState === 'DEAD' ? '#ff0000' : player.color;
+                ctx.fillStyle = gameState === 'DEAD' ? '#ff4444' : player.color;
+                ctx.fillRect(-player.w/2, -player.h/2, player.w, player.h);
+                ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.strokeRect(-player.w/2, -player.h/2, player.w, player.h);
+                
+                if (player.face) {
+                    ctx.rotate(-player.rotation);
+                    ctx.font = "24px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+                    ctx.fillText(player.face, 0, 0);
+                }
+                ctx.restore();
+            }
+            requestAnimationFrame(() => { update(); draw(); });
+        }
+
+        initMenu();
+        draw();
+    </script>
+</body>
+</html>
