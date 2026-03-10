@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Block Dash Evolution - Fixed Collisions</title>
+    <title>Block Dash Evolution - Audio System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -70,7 +70,9 @@
             align-items: center;
             justify-content: center;
             z-index: 110;
-            pointer-events: none;
+            background: rgba(0, 0, 0, 0.5);
+            pointer-events: auto;
+            cursor: pointer;
         }
         .death-text {
             font-size: 4rem;
@@ -78,6 +80,19 @@
             color: #ff4444;
             text-shadow: 0 0 20px rgba(255, 68, 68, 0.5);
             animation: popIn 0.3s forwards;
+            pointer-events: none;
+        }
+        .restart-hint {
+            color: white;
+            opacity: 0.6;
+            margin-top: 10px;
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.8; }
         }
         @keyframes popIn {
             0% { transform: scale(0.5); }
@@ -173,30 +188,38 @@
             cursor: pointer;
         }
         .audio-toggle {
-            margin-top: 15px;
-            font-size: 0.6rem;
-            color: #555;
+            margin-top: 25px;
+            font-size: 0.9rem;
+            color: #777;
             cursor: pointer;
+            padding: 10px 20px;
+            border: 1px solid #333;
+            border-radius: 10px;
+            transition: all 0.3s;
         }
-        .audio-toggle.active { color: #00f2ff; }
+        .audio-toggle.active { 
+            color: #00f2ff; 
+            border-color: #00f2ff;
+            box-shadow: 0 0 15px rgba(0, 242, 255, 0.2);
+        }
     </style>
 </head>
 <body>
 
     <div id="uiHud" class="ui-container" style="display: none;">
         <div>
-            <p class="text-xs opacity-60">PUNTOS</p>
+            <p class="text-xs opacity-60 uppercase">Puntos</p>
             <p class="text-3xl font-bold" id="score">0</p>
         </div>
         <div class="text-center">
-            <p class="text-xs opacity-60">NIVEL</p>
+            <p class="text-xs opacity-60 uppercase">Nivel</p>
             <p class="text-2xl font-bold" id="levelLabel">1</p>
             <div class="progress-bar-container">
                 <div id="progressBar"></div>
             </div>
         </div>
         <div class="text-right">
-            <p class="text-xs opacity-60">RÉCORD</p>
+            <p class="text-xs opacity-60 uppercase">Récord</p>
             <p class="text-xl font-bold text-green-400" id="highscore">0</p>
         </div>
         <button class="btn-back" onclick="showMenu()">SALIR</button>
@@ -209,7 +232,8 @@
         <button class="btn-custom" onclick="toggleSkinModal(true)">
             <span>👕</span> ASPECTO
         </button>
-        <div id="audioBtn" class="audio-toggle" onclick="toggleAudio()">AUDIO DESACTIVADO</div>
+        <!-- BOTÓN DE AUDIO MÁS VISIBLE -->
+        <div id="audioBtn" class="audio-toggle" onclick="toggleAudio()">🔊 AUDIO DESACTIVADO</div>
     </div>
 
     <div id="skinModal" class="skin-modal">
@@ -229,8 +253,9 @@
         </div>
     </div>
 
-    <div id="deathOverlay" class="death-overlay">
+    <div id="deathOverlay" class="death-overlay" onclick="manualRestart()">
         <h2 class="death-text">GAME OVER</h2>
+        <p class="restart-hint">TAP PARA REINTENTAR</p>
     </div>
 
     <canvas id="gameCanvas"></canvas>
@@ -261,6 +286,16 @@
             grounded: false, rotation: 0,
             color: '#00f2ff', face: '🙂'
         };
+
+        let currentLevelIndex = 0;
+        let gameState = 'MENU'; 
+        let score = 0;
+        let highscore = 0;
+        let frames = 0;
+        let lastObstaclePos = 0;
+        let obstacles = [];
+        let deathTimestamp = 0;
+        let autoRestartTimeout = null;
 
         function toggleSkinModal(show) {
             skinModal.style.display = show ? 'flex' : 'none';
@@ -301,12 +336,24 @@
         let isAudioEnabled = false;
         let musicLoop = null;
 
+        // Función para activar/desactivar el sistema de audio
         function toggleAudio() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Reanudar el contexto si estaba suspendido (política del navegador)
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
             isAudioEnabled = !isAudioEnabled;
-            audioBtn.innerText = isAudioEnabled ? "AUDIO ACTIVADO" : "AUDIO DESACTIVADO";
+            audioBtn.innerText = isAudioEnabled ? "🔊 AUDIO ACTIVADO" : "🔇 AUDIO DESACTIVADO";
             audioBtn.classList.toggle('active', isAudioEnabled);
-            if (!isAudioEnabled) stopMusic(); else if (gameState === 'PLAYING') startMusic();
+            
+            if (!isAudioEnabled) {
+                stopMusic(); 
+            } else if (gameState === 'PLAYING') {
+                startMusic();
+            }
         }
 
         function playJumpSound() {
@@ -322,28 +369,47 @@
             osc.start(); osc.stop(audioCtx.currentTime + 0.1);
         }
 
-        function stopMusic() { if (musicLoop) { clearInterval(musicLoop); musicLoop = null; } }
+        function stopMusic() { 
+            if (musicLoop) { 
+                clearInterval(musicLoop); 
+                musicLoop = null; 
+            } 
+        }
 
         function startMusic() {
             stopMusic();
             if (!isAudioEnabled || !audioCtx) return;
+            
+            // Aumentamos velocidad según el nivel
             const bpm = 120 + (currentLevelIndex * 20);
             const interval = (60 / bpm) * 1000 / 2;
             let step = 0;
+            
+            // Frecuencias base para las melodías
             const baseFreqs = [[110, 130, 165], [82, 110, 123], [73, 92, 110], [55, 65, 82], [146, 174, 220]];
+            
             musicLoop = setInterval(() => {
                 if (gameState !== 'PLAYING') return;
+                
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
                 const freqs = baseFreqs[currentLevelIndex % baseFreqs.length];
                 let freq = freqs[step % freqs.length];
+                
+                // Cada 4 pasos un golpe de bajo/acentuado
                 if (step % 4 === 0) freq *= 2;
+                
                 osc.type = currentLevelIndex > 2 ? 'sawtooth' : 'triangle';
                 osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                
                 gain.gain.setValueAtTime(0.02, audioCtx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
-                osc.connect(gain); gain.connect(audioCtx.destination);
-                osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+                
+                osc.connect(gain); 
+                gain.connect(audioCtx.destination);
+                
+                osc.start(); 
+                osc.stop(audioCtx.currentTime + 0.2);
                 step++;
             }, interval);
         }
@@ -355,14 +421,6 @@
             { id: 3, speed: 15, bg: '#201005', accent: '#ff8800', target: 2500, name: "INFERNO" },
             { id: 4, speed: 18, bg: '#200505', accent: '#ff0044', target: 4000, name: "CAOS" }
         ];
-
-        let currentLevelIndex = 0;
-        let gameState = 'MENU'; 
-        let score = 0;
-        let highscore = 0;
-        let frames = 0;
-        let lastObstaclePos = 0;
-        let obstacles = [];
 
         function initMenu() {
             levelGrid.innerHTML = '';
@@ -382,6 +440,7 @@
         function showMenu() {
             gameState = 'MENU';
             stopMusic();
+            if (autoRestartTimeout) clearTimeout(autoRestartTimeout);
             levelMenu.style.display = 'flex';
             uiHud.style.display = 'none';
             deathOverlay.style.display = 'none';
@@ -395,7 +454,9 @@
             uiHud.style.display = 'flex';
             resetLevelState();
             updateLevelUI();
-            startMusic();
+            
+            // Iniciar música si el audio está activo
+            if (isAudioEnabled) startMusic();
         }
 
         function resetLevelState() {
@@ -423,6 +484,10 @@
         resize();
 
         function handleInput() {
+            if (gameState === 'DEAD') {
+                manualRestart();
+                return;
+            }
             if (gameState !== 'PLAYING') return;
             if (player.grounded || player.jumpCount < player.maxJumps) {
                 player.dy = player.jumpForce;
@@ -432,9 +497,32 @@
             }
         }
 
-        window.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(); }, { passive: false });
-        window.addEventListener('mousedown', handleInput);
-        window.addEventListener('keydown', (e) => { if(e.code === 'Space' || e.code === 'ArrowUp') handleInput(); });
+        function manualRestart() {
+            if (Date.now() - deathTimestamp < 200) return;
+            
+            if (autoRestartTimeout) clearTimeout(autoRestartTimeout);
+            deathOverlay.style.display = 'none'; 
+            resetLevelState(); 
+            gameState = 'PLAYING';
+            if (isAudioEnabled) startMusic(); 
+        }
+
+        window.addEventListener('touchstart', (e) => { 
+            if(gameState === 'DEAD') {
+                manualRestart();
+            } else {
+                e.preventDefault(); 
+                handleInput();
+            }
+        }, { passive: false });
+
+        window.addEventListener('mousedown', (e) => {
+             handleInput();
+        });
+
+        window.addEventListener('keydown', (e) => { 
+            if(e.code === 'Space' || e.code === 'ArrowUp') handleInput(); 
+        });
 
         function spawnObstacle() {
             const groundY = canvas.height - 100;
@@ -466,7 +554,6 @@
             const groundY = canvas.height - 100;
             let onAnySurface = false;
 
-            // Colisión con suelo base
             if (player.y + player.h >= groundY) {
                 player.y = groundY - player.h; 
                 player.dy = 0;
@@ -482,7 +569,6 @@
             obstacles.forEach((obs, i) => {
                 obs.x -= level.speed;
                 if (obs.type === 'block') {
-                    // Definir áreas de colisión
                     const pLeft = player.x + 10;
                     const pRight = player.x + player.w - 10;
                     const pBottom = player.y + player.h;
@@ -493,9 +579,7 @@
                     const oTop = obs.y;
                     const oBottom = obs.y + obs.h;
 
-                    // Verificar si hay intersección general
                     if (pRight > oLeft && pLeft < oRight && pBottom > oTop && pTop < oBottom) {
-                        // Si estamos cayendo y el pie está cerca de la parte superior del bloque
                         if (player.dy >= 0 && pBottom <= oTop + 25) {
                             player.y = oTop - player.h;
                             player.dy = 0;
@@ -503,7 +587,6 @@
                             player.jumpCount = 0;
                             onAnySurface = true;
                         } else {
-                            // Chocamos de frente o por abajo
                             handleDeath();
                         }
                     }
@@ -524,15 +607,15 @@
 
         function handleDeath() {
             if (gameState === 'DEAD') return;
-            gameState = 'DEAD'; stopMusic();
+            gameState = 'DEAD'; 
+            deathTimestamp = Date.now();
+            stopMusic();
             if (score > highscore) { highscore = score; highscoreElement.innerText = highscore; }
             deathOverlay.style.display = 'flex';
-            setTimeout(() => { 
-                deathOverlay.style.display = 'none'; 
-                resetLevelState(); 
-                gameState = 'PLAYING';
-                startMusic(); 
-            }, 1500);
+            
+            autoRestartTimeout = setTimeout(() => { 
+                if(gameState === 'DEAD') manualRestart();
+            }, 2000);
         }
 
         function draw() {
