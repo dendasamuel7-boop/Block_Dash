@@ -2,8 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Block Dash Evolution - Audio System</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Block Dash Evolution - Tablet & Mobile Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -11,7 +11,9 @@
             overflow: hidden;
             background-color: #050505;
             font-family: 'Arial Black', sans-serif;
-            touch-action: none;
+            touch-action: none; /* Desactiva gestos del navegador para control total */
+            -webkit-user-select: none;
+            user-select: none;
         }
         #gameCanvas {
             display: block;
@@ -19,12 +21,13 @@
             height: 100vh;
             transition: background-color 1s ease;
         }
+        /* Contenedor HUD adaptativo */
         .ui-container {
             position: absolute;
-            top: 0;
+            top: env(safe-area-inset-top, 20px);
             left: 0;
             width: 100%;
-            padding: 20px;
+            padding: 0 20px;
             color: white;
             pointer-events: none;
             display: flex;
@@ -41,6 +44,7 @@
             justify-content: center;
             z-index: 100;
             padding: 20px;
+            overflow-y: auto;
         }
         .skin-modal {
             position: fixed;
@@ -58,8 +62,8 @@
             padding: 30px;
             border-radius: 24px;
             border: 2px solid #333;
-            width: 90%;
-            max-width: 400px;
+            width: 95%;
+            max-width: 450px;
             box-shadow: 0 0 50px rgba(0,0,0,0.5);
         }
         .death-overlay {
@@ -75,7 +79,7 @@
             cursor: pointer;
         }
         .death-text {
-            font-size: 4rem;
+            font-size: clamp(3rem, 10vw, 5rem);
             font-weight: 900;
             color: #ff4444;
             text-shadow: 0 0 20px rgba(255, 68, 68, 0.5);
@@ -86,7 +90,7 @@
             color: white;
             opacity: 0.6;
             margin-top: 10px;
-            font-size: 0.8rem;
+            font-size: 1rem;
             letter-spacing: 2px;
             animation: pulse 1.5s infinite;
         }
@@ -100,23 +104,24 @@
         }
         .level-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
             gap: 15px;
             width: 100%;
-            max-width: 800px;
-            margin-top: 2rem;
+            max-width: 600px;
+            margin-top: 1.5rem;
         }
         .level-card {
             background: #111;
             border: 3px solid #333;
-            padding: 20px;
+            padding: clamp(10px, 4vw, 20px);
             border-radius: 15px;
             text-align: center;
             cursor: pointer;
             transition: all 0.2s;
+            pointer-events: auto;
         }
-        .level-card:hover {
-            transform: translateY(-5px);
+        .level-card:active {
+            transform: scale(0.95);
             border-color: #fff;
         }
         .skin-options {
@@ -127,8 +132,8 @@
             margin-top: 10px;
         }
         .skin-btn {
-            width: 42px;
-            height: 42px;
+            width: 44px;
+            height: 44px;
             border-radius: 10px;
             border: 2px solid #333;
             cursor: pointer;
@@ -143,28 +148,28 @@
             transform: scale(1.1);
         }
         .btn-custom {
-            margin-top: 30px;
+            margin-top: 20px;
             background: white;
             color: black;
-            padding: 12px 24px;
+            padding: 14px 28px;
             border-radius: 50px;
             font-weight: bold;
             display: flex;
             align-items: center;
             gap: 10px;
             cursor: pointer;
-            transition: transform 0.2s;
+            pointer-events: auto;
         }
-        .btn-custom:active { transform: scale(0.95); }
         .progress-bar-container {
             position: absolute;
-            top: 70px;
+            top: 80px;
             left: 50%;
             transform: translateX(-50%);
-            width: 200px;
-            height: 6px;
+            width: 40%;
+            min-width: 150px;
+            height: 8px;
             background: rgba(255,255,255,0.1);
-            border-radius: 3px;
+            border-radius: 4px;
             overflow: hidden;
         }
         #progressBar {
@@ -175,32 +180,30 @@
         }
         .btn-back {
             position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255,255,255,0.1);
+            bottom: env(safe-area-inset-bottom, 30px);
+            right: 20px;
+            background: rgba(255,255,255,0.15);
             color: white;
-            padding: 10px 20px;
-            border-radius: 20px;
+            padding: 12px 24px;
+            border-radius: 30px;
             pointer-events: auto;
             border: 1px solid rgba(255,255,255,0.3);
-            font-size: 0.8rem;
-            cursor: pointer;
+            font-size: 0.9rem;
+            backdrop-filter: blur(5px);
         }
         .audio-toggle {
-            margin-top: 25px;
-            font-size: 0.9rem;
+            margin-top: 20px;
+            font-size: 0.8rem;
             color: #777;
             cursor: pointer;
-            padding: 10px 20px;
+            padding: 8px 16px;
             border: 1px solid #333;
             border-radius: 10px;
-            transition: all 0.3s;
+            pointer-events: auto;
         }
         .audio-toggle.active { 
             color: #00f2ff; 
             border-color: #00f2ff;
-            box-shadow: 0 0 15px rgba(0, 242, 255, 0.2);
         }
     </style>
 </head>
@@ -208,31 +211,30 @@
 
     <div id="uiHud" class="ui-container" style="display: none;">
         <div>
-            <p class="text-xs opacity-60 uppercase">Puntos</p>
-            <p class="text-3xl font-bold" id="score">0</p>
+            <p class="text-[10px] opacity-60 uppercase">Puntos</p>
+            <p class="text-2xl md:text-4xl font-bold" id="score">0</p>
         </div>
         <div class="text-center">
-            <p class="text-xs opacity-60 uppercase">Nivel</p>
-            <p class="text-2xl font-bold" id="levelLabel">1</p>
+            <p class="text-[10px] opacity-60 uppercase">Fase</p>
+            <p class="text-xl md:text-3xl font-bold" id="levelLabel">1</p>
             <div class="progress-bar-container">
                 <div id="progressBar"></div>
             </div>
         </div>
         <div class="text-right">
-            <p class="text-xs opacity-60 uppercase">Récord</p>
-            <p class="text-xl font-bold text-green-400" id="highscore">0</p>
+            <p class="text-[10px] opacity-60 uppercase">Récord</p>
+            <p class="text-lg md:text-2xl font-bold text-green-400" id="highscore">0</p>
         </div>
         <button class="btn-back" onclick="showMenu()">SALIR</button>
     </div>
 
     <div id="levelMenu" class="menu-overlay">
-        <h1 class="text-6xl font-black italic text-white mb-2">BLOCK DASH</h1>
-        <p class="text-gray-500 uppercase tracking-widest text-sm mb-6">Selecciona un Nivel</p>
+        <h1 class="text-4xl md:text-7xl font-black italic text-white mb-2">BLOCK DASH</h1>
+        <p class="text-gray-500 uppercase tracking-widest text-[10px] md:text-sm mb-4">Tablet & Mobile Edition</p>
         <div id="levelGrid" class="level-grid"></div>
         <button class="btn-custom" onclick="toggleSkinModal(true)">
             <span>👕</span> ASPECTO
         </button>
-        <!-- BOTÓN DE AUDIO MÁS VISIBLE -->
         <div id="audioBtn" class="audio-toggle" onclick="toggleAudio()">🔊 AUDIO DESACTIVADO</div>
     </div>
 
@@ -247,15 +249,15 @@
                 <p class="text-[10px] text-gray-400 mb-2 tracking-widest uppercase text-center">Cara (Smile)</p>
                 <div id="faceOptions" class="skin-options"></div>
             </div>
-            <button class="w-full bg-white text-black py-3 rounded-xl font-bold" onclick="toggleSkinModal(false)">
-                GUARDAR Y CERRAR
+            <button class="w-full bg-white text-black py-4 rounded-2xl font-bold" onclick="toggleSkinModal(false)">
+                CERRAR
             </button>
         </div>
     </div>
 
     <div id="deathOverlay" class="death-overlay" onclick="manualRestart()">
         <h2 class="death-text">GAME OVER</h2>
-        <p class="restart-hint">TAP PARA REINTENTAR</p>
+        <p class="restart-hint">TOCA PARA REINTENTAR</p>
     </div>
 
     <canvas id="gameCanvas"></canvas>
@@ -263,6 +265,8 @@
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        
+        // Elementos UI
         const scoreElement = document.getElementById('score');
         const highscoreElement = document.getElementById('highscore');
         const levelLabel = document.getElementById('levelLabel');
@@ -280,8 +284,8 @@
         };
 
         const player = {
-            x: 150, y: 0, w: 48, h: 48, dy: 0,
-            gravity: 0.95, jumpForce: -16.5,
+            x: 0, y: 0, w: 50, h: 50, dy: 0,
+            gravity: 0, jumpForce: 0,
             jumpCount: 0, maxJumps: 2,
             grounded: false, rotation: 0,
             color: '#00f2ff', face: '🙂'
@@ -297,6 +301,17 @@
         let deathTimestamp = 0;
         let autoRestartTimeout = null;
 
+        // Proporciones responsivas
+        function updatePhysicsConstants() {
+            // Adaptamos la gravedad y salto a la altura de la pantalla para que se sienta igual en iPad y móvil
+            const hFactor = canvas.height / 800;
+            player.gravity = 0.9 * hFactor;
+            player.jumpForce = -16 * hFactor;
+            player.w = canvas.height * 0.065; // Bloque proporcional a la altura
+            player.h = player.w;
+            player.x = canvas.width * 0.15; // 15% del ancho desde la izquierda
+        }
+
         function toggleSkinModal(show) {
             skinModal.style.display = show ? 'flex' : 'none';
         }
@@ -311,7 +326,8 @@
                 const btn = document.createElement('div');
                 btn.className = 'skin-btn' + (color === player.color ? ' active' : '');
                 btn.style.backgroundColor = color;
-                btn.onclick = () => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
                     player.color = color;
                     document.querySelectorAll('#colorOptions .skin-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
@@ -323,7 +339,8 @@
                 const btn = document.createElement('div');
                 btn.className = 'skin-btn' + (face === player.face ? ' active' : '');
                 btn.innerText = face || '❌';
-                btn.onclick = () => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
                     player.face = face;
                     document.querySelectorAll('#faceOptions .skin-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
@@ -332,28 +349,18 @@
             });
         }
 
+        // Audio System
         let audioCtx = null;
         let isAudioEnabled = false;
         let musicLoop = null;
 
-        // Función para activar/desactivar el sistema de audio
         function toggleAudio() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            
-            // Reanudar el contexto si estaba suspendido (política del navegador)
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
-
+            if (audioCtx.state === 'suspended') audioCtx.resume();
             isAudioEnabled = !isAudioEnabled;
             audioBtn.innerText = isAudioEnabled ? "🔊 AUDIO ACTIVADO" : "🔇 AUDIO DESACTIVADO";
             audioBtn.classList.toggle('active', isAudioEnabled);
-            
-            if (!isAudioEnabled) {
-                stopMusic(); 
-            } else if (gameState === 'PLAYING') {
-                startMusic();
-            }
+            if (!isAudioEnabled) stopMusic(); else if (gameState === 'PLAYING') startMusic();
         }
 
         function playJumpSound() {
@@ -369,47 +376,28 @@
             osc.start(); osc.stop(audioCtx.currentTime + 0.1);
         }
 
-        function stopMusic() { 
-            if (musicLoop) { 
-                clearInterval(musicLoop); 
-                musicLoop = null; 
-            } 
-        }
+        function stopMusic() { if (musicLoop) { clearInterval(musicLoop); musicLoop = null; } }
 
         function startMusic() {
             stopMusic();
             if (!isAudioEnabled || !audioCtx) return;
-            
-            // Aumentamos velocidad según el nivel
             const bpm = 120 + (currentLevelIndex * 20);
             const interval = (60 / bpm) * 1000 / 2;
             let step = 0;
-            
-            // Frecuencias base para las melodías
             const baseFreqs = [[110, 130, 165], [82, 110, 123], [73, 92, 110], [55, 65, 82], [146, 174, 220]];
-            
             musicLoop = setInterval(() => {
                 if (gameState !== 'PLAYING') return;
-                
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
                 const freqs = baseFreqs[currentLevelIndex % baseFreqs.length];
                 let freq = freqs[step % freqs.length];
-                
-                // Cada 4 pasos un golpe de bajo/acentuado
                 if (step % 4 === 0) freq *= 2;
-                
                 osc.type = currentLevelIndex > 2 ? 'sawtooth' : 'triangle';
                 osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-                
                 gain.gain.setValueAtTime(0.02, audioCtx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
-                
-                osc.connect(gain); 
-                gain.connect(audioCtx.destination);
-                
-                osc.start(); 
-                osc.stop(audioCtx.currentTime + 0.2);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.2);
                 step++;
             }, interval);
         }
@@ -454,17 +442,16 @@
             uiHud.style.display = 'flex';
             resetLevelState();
             updateLevelUI();
-            
-            // Iniciar música si el audio está activo
             if (isAudioEnabled) startMusic();
         }
 
         function resetLevelState() {
             score = 0; frames = 0; obstacles = [];
-            player.dy = 0; player.y = canvas.height - 148;
+            player.dy = 0; player.y = canvas.height - (canvas.height * 0.25);
             player.rotation = 0; player.jumpCount = 0;
             lastObstaclePos = 0;
             progressBar.style.width = "0%";
+            updatePhysicsConstants();
         }
 
         function updateLevelUI() {
@@ -478,7 +465,8 @@
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            if (gameState === 'MENU') player.y = canvas.height - 148;
+            updatePhysicsConstants();
+            if (gameState === 'MENU') player.y = canvas.height - (canvas.height * 0.25);
         }
         window.addEventListener('resize', resize);
         resize();
@@ -498,8 +486,7 @@
         }
 
         function manualRestart() {
-            if (Date.now() - deathTimestamp < 200) return;
-            
+            if (Date.now() - deathTimestamp < 250) return; // Delay mayor para evitar doble click en tablet
             if (autoRestartTimeout) clearTimeout(autoRestartTimeout);
             deathOverlay.style.display = 'none'; 
             resetLevelState(); 
@@ -507,17 +494,14 @@
             if (isAudioEnabled) startMusic(); 
         }
 
-        window.addEventListener('touchstart', (e) => { 
-            if(gameState === 'DEAD') {
-                manualRestart();
-            } else {
-                e.preventDefault(); 
-                handleInput();
-            }
+        // Eventos táctiles mejorados
+        canvas.addEventListener('touchstart', (e) => { 
+            e.preventDefault();
+            handleInput();
         }, { passive: false });
 
         window.addEventListener('mousedown', (e) => {
-             handleInput();
+            if (e.target === canvas) handleInput();
         });
 
         window.addEventListener('keydown', (e) => { 
@@ -526,16 +510,19 @@
 
         function spawnObstacle() {
             const groundY = canvas.height - 100;
+            const obsH = player.h;
             const rand = Math.random();
+            const startX = canvas.width + 100;
+
             if (rand < 0.25) {
-                obstacles.push({ x: canvas.width + 100, y: groundY - 50, w: 60, h: 50, type: 'block' });
+                obstacles.push({ x: startX, y: groundY - obsH, w: obsH * 1.2, h: obsH, type: 'block' });
             } else if (rand < 0.45) {
-                obstacles.push({ x: canvas.width + 100, y: groundY - 50, w: 60, h: 50, type: 'block' });
-                obstacles.push({ x: canvas.width + 160, y: groundY - 100, w: 60, h: 100, type: 'block' });
+                obstacles.push({ x: startX, y: groundY - obsH, w: obsH * 1.2, h: obsH, type: 'block' });
+                obstacles.push({ x: startX + obsH * 1.3, y: groundY - obsH * 2, w: obsH * 1.2, h: obsH * 2, type: 'block' });
             } else if (rand < 0.70) {
-                obstacles.push({ x: canvas.width + 100, y: groundY - 50, w: 50, h: 50, type: 'spike' });
+                obstacles.push({ x: startX, y: groundY - obsH, w: obsH, h: obsH, type: 'spike' });
             } else {
-                obstacles.push({ x: canvas.width + 100, y: groundY - 140, w: 220, h: 48, type: 'block' });
+                obstacles.push({ x: startX, y: groundY - obsH * 2.8, w: obsH * 4, h: obsH * 0.9, type: 'block' });
             }
         }
 
@@ -562,25 +549,31 @@
                 onAnySurface = true;
             }
 
-            const gap = 450 - (level.speed * 4);
+            const speedFactor = canvas.width / 1200; // Velocidad proporcional al ancho
+            const currentSpeed = level.speed * (speedFactor < 0.8 ? 0.8 : speedFactor);
+
+            const gap = (canvas.width * 0.4) - (currentSpeed * 2);
             if (canvas.width - lastObstaclePos > gap) { spawnObstacle(); lastObstaclePos = canvas.width; }
-            lastObstaclePos -= level.speed;
+            lastObstaclePos -= currentSpeed;
 
             obstacles.forEach((obs, i) => {
-                obs.x -= level.speed;
-                if (obs.type === 'block') {
-                    const pLeft = player.x + 10;
-                    const pRight = player.x + player.w - 10;
-                    const pBottom = player.y + player.h;
-                    const pTop = player.y;
+                obs.x -= currentSpeed;
+                
+                // Colisiones
+                const pLeft = player.x + 5;
+                const pRight = player.x + player.w - 5;
+                const pTop = player.y + 5;
+                const pBottom = player.y + player.h - 5;
 
-                    const oLeft = obs.x;
-                    const oRight = obs.x + obs.w;
-                    const oTop = obs.y;
-                    const oBottom = obs.y + obs.h;
+                const oLeft = obs.x;
+                const oRight = obs.x + obs.w;
+                const oTop = obs.y;
+                const oBottom = obs.y + obs.h;
 
-                    if (pRight > oLeft && pLeft < oRight && pBottom > oTop && pTop < oBottom) {
-                        if (player.dy >= 0 && pBottom <= oTop + 25) {
+                if (pRight > oLeft && pLeft < oRight && pBottom > oTop && pTop < oBottom) {
+                    if (obs.type === 'block') {
+                        // Colisión desde arriba (aterrizar en bloque)
+                        if (player.dy >= 0 && (player.y + player.h) <= oTop + 20) {
                             player.y = oTop - player.h;
                             player.dy = 0;
                             player.grounded = true;
@@ -589,15 +582,11 @@
                         } else {
                             handleDeath();
                         }
-                    }
-                } else if (obs.type === 'spike') {
-                    const padding = 12;
-                    if (player.x + padding < obs.x + obs.w - padding && player.x + player.w - padding > obs.x + padding &&
-                        player.y + padding < obs.y + obs.h - padding && player.y + player.h - padding > obs.y + padding) {
+                    } else {
                         handleDeath();
                     }
                 }
-                if (obs.x < -500) obstacles.splice(i, 1);
+                if (obs.x < -600) obstacles.splice(i, 1);
             });
 
             if (!onAnySurface && player.y + player.h < groundY) {
@@ -612,7 +601,6 @@
             stopMusic();
             if (score > highscore) { highscore = score; highscoreElement.innerText = highscore; }
             deathOverlay.style.display = 'flex';
-            
             autoRestartTimeout = setTimeout(() => { 
                 if(gameState === 'DEAD') manualRestart();
             }, 2000);
@@ -621,6 +609,7 @@
         function draw() {
             const level = (gameState === 'PLAYING' || gameState === 'DEAD') ? levels[currentLevelIndex] : { bg: '#050505', accent: '#333' };
             ctx.fillStyle = level.bg; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
             const groundY = canvas.height - 100;
             ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, groundY, canvas.width, 100);
             ctx.strokeStyle = level.accent; ctx.lineWidth = 4;
@@ -631,8 +620,11 @@
                     ctx.save();
                     if (obs.type === 'spike') {
                         ctx.fillStyle = '#ff4444'; ctx.beginPath();
-                        ctx.moveTo(obs.x, obs.y + obs.h); ctx.lineTo(obs.x + obs.w/2, obs.y); ctx.lineTo(obs.x + obs.w, obs.y + obs.h);
-                        ctx.closePath(); ctx.fill(); ctx.strokeStyle = 'white'; ctx.stroke();
+                        ctx.moveTo(obs.x, obs.y + obs.h); 
+                        ctx.lineTo(obs.x + obs.w/2, obs.y); 
+                        ctx.lineTo(obs.x + obs.w, obs.y + obs.h);
+                        ctx.closePath(); ctx.fill(); 
+                        ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.stroke();
                     } else {
                         ctx.fillStyle = '#111'; ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
                         ctx.strokeStyle = level.accent; ctx.lineWidth = 3; ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
@@ -647,14 +639,14 @@
                     else player.rotation = Math.round(player.rotation / (Math.PI/2)) * (Math.PI/2);
                 }
                 ctx.rotate(player.rotation);
-                ctx.shadowBlur = 15; ctx.shadowColor = gameState === 'DEAD' ? '#ff0000' : player.color;
+                ctx.shadowBlur = 20; ctx.shadowColor = gameState === 'DEAD' ? '#ff0000' : player.color;
                 ctx.fillStyle = gameState === 'DEAD' ? '#ff4444' : player.color;
                 ctx.fillRect(-player.w/2, -player.h/2, player.w, player.h);
-                ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.strokeRect(-player.w/2, -player.h/2, player.w, player.h);
+                ctx.strokeStyle = 'white'; ctx.lineWidth = 3; ctx.strokeRect(-player.w/2, -player.h/2, player.w, player.h);
                 
                 if (player.face) {
                     ctx.rotate(-player.rotation);
-                    ctx.font = "24px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+                    ctx.font = `${player.h * 0.5}px Arial`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
                     ctx.fillText(player.face, 0, 0);
                 }
                 ctx.restore();
