@@ -11,7 +11,7 @@
             overflow: hidden;
             background-color: #050505;
             font-family: 'Arial Black', sans-serif;
-            touch-action: none; /* Desactiva gestos del navegador para control total */
+            touch-action: none;
             -webkit-user-select: none;
             user-select: none;
         }
@@ -21,7 +21,6 @@
             height: 100vh;
             transition: background-color 1s ease;
         }
-        /* Contenedor HUD adaptativo */
         .ui-container {
             position: absolute;
             top: env(safe-area-inset-top, 20px);
@@ -266,7 +265,6 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         
-        // Elementos UI
         const scoreElement = document.getElementById('score');
         const highscoreElement = document.getElementById('highscore');
         const levelLabel = document.getElementById('levelLabel');
@@ -280,7 +278,7 @@
 
         const skinConfig = {
             colors: ['#00f2ff', '#ff00ff', '#00ff88', '#ff8800', '#ff4444', '#ffffff', '#ffff00'],
-            faces: ['', '🙂', '😎', '😡', '😱', '👻', '💀', '🔥','🥵','🐷','🐨','🐳','🐣','🦥',🐉','🐲,']
+            faces: ['', '🙂', '😎', '😡', '😱', '👻', '💀', '🔥', '🥵', '🐷', '🐨', '🐳', '🐣', '🦥', '🐉', '🐲']
         };
 
         const player = {
@@ -301,15 +299,13 @@
         let deathTimestamp = 0;
         let autoRestartTimeout = null;
 
-        // Proporciones responsivas
         function updatePhysicsConstants() {
-            // Adaptamos la gravedad y salto a la altura de la pantalla para que se sienta igual en iPad y móvil
             const hFactor = canvas.height / 800;
             player.gravity = 0.9 * hFactor;
             player.jumpForce = -16 * hFactor;
-            player.w = canvas.height * 0.065; // Bloque proporcional a la altura
+            player.w = canvas.height * 0.065;
             player.h = player.w;
-            player.x = canvas.width * 0.15; // 15% del ancho desde la izquierda
+            player.x = canvas.width * 0.15;
         }
 
         function toggleSkinModal(show) {
@@ -349,7 +345,6 @@
             });
         }
 
-        // Audio System
         let audioCtx = null;
         let isAudioEnabled = false;
         let musicLoop = null;
@@ -468,8 +463,6 @@
             updatePhysicsConstants();
             if (gameState === 'MENU') player.y = canvas.height - (canvas.height * 0.25);
         }
-        window.addEventListener('resize', resize);
-        resize();
 
         function handleInput() {
             if (gameState === 'DEAD') {
@@ -486,7 +479,7 @@
         }
 
         function manualRestart() {
-            if (Date.now() - deathTimestamp < 250) return; // Delay mayor para evitar doble click en tablet
+            if (Date.now() - deathTimestamp < 250) return;
             if (autoRestartTimeout) clearTimeout(autoRestartTimeout);
             deathOverlay.style.display = 'none'; 
             resetLevelState(); 
@@ -494,7 +487,6 @@
             if (isAudioEnabled) startMusic(); 
         }
 
-        // Eventos táctiles mejorados
         canvas.addEventListener('touchstart', (e) => { 
             e.preventDefault();
             handleInput();
@@ -549,7 +541,7 @@
                 onAnySurface = true;
             }
 
-            const speedFactor = canvas.width / 1200; // Velocidad proporcional al ancho
+            const speedFactor = canvas.width / 1200;
             const currentSpeed = level.speed * (speedFactor < 0.8 ? 0.8 : speedFactor);
 
             const gap = (canvas.width * 0.4) - (currentSpeed * 2);
@@ -559,7 +551,6 @@
             obstacles.forEach((obs, i) => {
                 obs.x -= currentSpeed;
                 
-                // Colisiones
                 const pLeft = player.x + 5;
                 const pRight = player.x + player.w - 5;
                 const pTop = player.y + 5;
@@ -572,7 +563,6 @@
 
                 if (pRight > oLeft && pLeft < oRight && pBottom > oTop && pTop < oBottom) {
                     if (obs.type === 'block') {
-                        // Colisión desde arriba (aterrizar en bloque)
                         if (player.dy >= 0 && (player.y + player.h) <= oTop + 20) {
                             player.y = oTop - player.h;
                             player.dy = 0;
@@ -654,12 +644,10 @@
             requestAnimationFrame(() => { update(); draw(); });
         }
 
+        window.addEventListener('resize', resize);
+        resize();
         initMenu();
         draw();
     </script>
 </body>
 </html>
-
-
-
-
